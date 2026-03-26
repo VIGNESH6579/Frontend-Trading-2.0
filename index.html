@@ -331,6 +331,8 @@ let stomp   = null;
 let inst    = 'NIFTY';
 let busy    = false;
 let arTimer = null;
+let autoEnabled = false;
+let lastFeedStart = 0;
 let liveOC  = null; // Latest OC from WebSocket V2 via Spring Boot
 
 /* ═══════════════════════════════════════════════════
@@ -506,6 +508,7 @@ async function startFeed(){
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({instrument:inst, expiry, apiKey})
     });
+    lastFeedStart = Date.now();
     log$(`V2 feed started: ${inst} ${expiry}`, 'inf');
   } catch(e){ log$('Start feed error: '+e.message,'err'); }
 }
@@ -579,6 +582,12 @@ function renderOC(d){
 async function analyze(){
   if(busy) return;
   if(!liveOC){ log$('No live data yet','warn'); return; }
+  // If we are analyzing right after switching instrument/expiry,
+  // websocket may not have delivered fresh data yet.
+  if(lastFeedStart && liveOC.timestamp && liveOC.timestamp < lastFeedStart){
+    log$('No fresh data yet','warn');
+    return;
+  }
 
   busy = true;
   const btn = document.getElementById('goBtn');
@@ -692,11 +701,22 @@ function setInst(i,el){
   inst=i;
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
   el.classList.add('on');
-  if(stomp?.connected) loadExpiries();
+  if(stomp?.connected){
+    // Prevent auto analyze from firing during expiry/feed switch.
+    if(autoEnabled) clearInterval(arTimer);
+    loadExpiries().then(()=>{
+      if(autoEnabled) restartAutoAnalyze();
+    });
+  }
 }
 function toggleAR(){
+  autoEnabled = document.getElementById('arChk').checked;
+  restartAutoAnalyze();
+}
+
+function restartAutoAnalyze(){
   clearInterval(arTimer);
-  if(document.getElementById('arChk').checked){
+  if(autoEnabled){
     arTimer=setInterval(analyze,3*60*1000);
     log$('Auto analyze every 3 min','ok');
   }
