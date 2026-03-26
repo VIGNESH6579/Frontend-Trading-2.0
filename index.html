@@ -331,7 +331,6 @@ let stomp   = null;
 let inst    = 'NIFTY';
 let busy    = false;
 let arTimer = null;
-let autoEnabled = false;
 let lastFeedStart = 0;
 let liveOC  = null; // Latest OC from WebSocket V2 via Spring Boot
 
@@ -702,24 +701,15 @@ function setInst(i,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
   el.classList.add('on');
   if(stomp?.connected){
-    // Prevent auto analyze from firing during expiry/feed switch.
-    if(autoEnabled) clearInterval(arTimer);
-    loadExpiries().then(()=>{
-      if(autoEnabled) restartAutoAnalyze();
-    });
+    loadExpiries();
   }
 }
 function toggleAR(){
-  autoEnabled = document.getElementById('arChk').checked;
-  restartAutoAnalyze();
-}
-
-function restartAutoAnalyze(){
+  // Manual mode only: keep compatibility with existing checkbox,
+  // but do not run timed auto-analysis.
+  document.getElementById('arChk').checked = false;
   clearInterval(arTimer);
-  if(autoEnabled){
-    arTimer=setInterval(analyze,3*60*1000);
-    log$('Auto analyze every 3 min','ok');
-  }
+  log$('Auto analyze disabled. Use ANALYZE NOW button.', 'warn');
 }
 function setWS(cls,txt){
   document.getElementById('wsdot').className='wsdot '+cls;
@@ -739,6 +729,8 @@ function fmtOI(v,s=false){
   return g+String(v);
 }
 document.getElementById('l_totp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+// Force manual analysis mode on load.
+document.getElementById('arChk').checked = false;
 </script>
 </body>
 </html>
